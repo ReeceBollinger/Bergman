@@ -2,12 +2,14 @@
 #install.packages("neonUtilities")
 #install.packages("neonOS")
 #install.packages("terra")
+#install.packages("tidymodels")
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(neonUtilities)
 library(neonOS)
 library(terra)
+library(tidymodels)
 
 dpID="DP1.20120.001"
 
@@ -24,6 +26,13 @@ neon_download(products="dpID=DP1.20120.001",
               end_date = 2022)
 
 
+
+
+saveRDS(macro, "data/BergMacros.RDS")
+
+#end of 01
+
+
 ####
 #Data manipulation on other script
 
@@ -36,7 +45,6 @@ macrodata
 class(macrodata)
 
 
-saveRDS(macro, "data/BergMacros.RDS")
 
 
 inv_taxonomyProcessed
@@ -102,6 +110,8 @@ bugs|>
   count()|>
   View()
 
+
+#Data Manipulation ####
 bugsite <- bugs|>
   as_tibble()|>
   filter(siteID %in% streamsites)|>
@@ -112,11 +122,8 @@ bugsite
 ##this is showing that there are ___ number of a family found at a site. 
 
 
-# i would like to make another table of these result but then I want to have a column that counts the number of site that they appear in for example for the first family  Aeolosomatidae i want another column that says like site n and then lists 11. 
 
-
-#	Aeolosomatidae = 11 sites
-#Aeshnidae = 12
+##this is giving the number of sites that the family is found. It does not take into account the amount of individuals just counts the number of times it appears in a site.
 
 
 
@@ -126,9 +133,6 @@ pres_bugs <- bugsite|>
   mutate(sites_present = n())
 pres_bugs
 
-
-
-##this is giving the number of sites that the family is found. It does not take into account the amount of individuals just counts the number of times it appears in a site.
 
 
 View(pres_bugs)
@@ -142,17 +146,10 @@ invert_pres <- pres_bugs|>
 
 
 
-
-
-
-
-
-
 invert_pres
 #This will give us the number of individuals for each site so we can know which family we should start with
 
-
-#### This is the data manipulation for the start of 2022.
+#Data Manipultion for body length ####
 #I will start by making a table that has all of what I need. Im working with the object "bugData" because it reads in the data. 
 
 Invert_Data <- bugData|>
@@ -260,7 +257,7 @@ ave_invert_data
 
 View(ave_invert_data)
 
-
+#FUNCTION for body length ####
 invert_fam <- sort(unique(ave_invert_data$family))
 
 
@@ -278,15 +275,14 @@ paste("Average body size for", i)
 
 print(invrt_list[[24]]) 
 print(invrt_list[[22]]) 
-
 #should be chion
 
-print(invrt_list)
+#Full List
+#print(invrt_list)
+#takess long time to run 
 
 
-
-####Convert to dry body mass
-
+####Convert to dry body mass ####
 
 source("LW_coef.R")
 lw <- read.csv("macro_lw_coeffs.csv")
@@ -349,10 +345,7 @@ ggplot(chiron_dw,
 
 #function to graph all 
 
-
 DW_fam <- sort(unique(Bug_DATA$family))
-
-
 invrt_dw_list <- lapply(DW_fam, function(i){
   ggplot(Bug_DATA[Bug_DATA$family == i, ], aes(x = mat.c, y = dw_AVE, color = family)) +
     geom_point()+
@@ -365,18 +358,28 @@ invrt_dw_list <- lapply(DW_fam, function(i){
 })
 
 print(invrt_dw_list[[26]]) 
+#print(invrt_dw_list)
 
 
 
-print(invrt_dw_list)
+n_sites_av <- Bug_DATA |>
+  filter(family %in% pres_bugs2_v)
+
+
+# temp range by family ####
+Bug_DATA |>
+  #filter(family %in% pres_bugs2_v) |>View()
+  group_by(family) |>
+  summarise(temp_range = max(mat.c) - min(mat.c)) |> View()
+  select(family, temp_range) |> 
+  distinct() |>
+  arrange(-temp_range)
+
+
 
 #pres_bugs has all of the family and the different sites they are present. 
-#so we should determaine what ones we would like to look at based on how often they appear. 
-DW_fam
-
-
-
-
+#so we should determine what ones we would like to look at based on how often they appear. 
+DW_fa
 #Ceratopogonidae = 23 sites
 print(invrt_dw_list[[23]]) 
 
@@ -413,7 +416,147 @@ print(invrt_dw_list[[147]])
 #Aturidae = 20 sites
 print(invrt_dw_list[[12]]) 
 
-#
+
+#start with 20 and compare log vs non log
+
+#Start with like 15 or 20 degrees. then plug into lapply and look at the range variablility 
+#Make note of the flat lines and opposite. 
+
+pres_bugs2 <- bugsite|>
+  as_tibble()|>
+  group_by(family)|>
+  summarize(sites_present = n())
+
+pres_bugs2_v <- pres_bugs2 |>
+  filter(sites_present >=20,
+         !is.na(family)) |>
+  pull(family)
+pres_bugs
+ 
+View(pres_bugs2)
+
+#### temp range by family ####
+
+
+range_of_bug <- Bug_DATA |>
+  group_by(family) |>
+  mutate(temp_range = max(mat.c) - min(mat.c)) |>
+  select(family, temp_range, dw_AVE ) |> 
+  distinct() |>
+  arrange(-temp_range)
+
+
+View(range_of_bug)
+range_of_bug
+
+#Graphing the ones with a specific temp range that falls with what we want to look at starting with >20 
+
+pres_bugs2_v
+
+
+range_20 <- lapply(pres_bugs2_v, function(i){
+  ggplot(Bug_DATA[Bug_DATA$family == i, ], aes(x = mat.c, y = dw_AVE, color = family)) +
+    geom_point()+
+    geom_smooth(method = "lm")+
+    labs(title = "Average body size for each family 2022",
+         x = "Average temperature per site in C",
+         y = "Average dry weight size in mg")+
+    scale_x_log10()+
+    scale_y_log10()
+})
+print(range_20[[1]])
+
+#these are families that have the bigger range (>20) with in the temp. We want to make sure the families we look at have a larger range becuase they are clearer to analyze. 
+pres_bugs2_v
+
+#1 Aturidae
+#Very odd relationship. One large mesauerment in the colder area and the rest fall on a line
+print(range_20[[1]])
+
+#2 Baetidae
+#Not a strong relationship but odd
+print(range_20[[2]])
+
+#3 Ceratopogonidae
+#Strong relationship
+print(range_20[[3]])
+
+#4 Chironomidae
+# good relationship
+print(range_20[[4]])
+
+#5 Empididae
+#good relationship
+print(range_20[[5]])
+
+#6 Enchytraeidae
+#Good relationship
+print(range_20[[6]])
+
+#7 Hygrobatidae
+#no relationship
+print(range_20[[7]])
+
+#8 Lebertiidae
+#bad relationship. One very large measurment that shifts data
+print(range_20[[8]])
+
+#9 Naididae
+#No relationship
+print(range_20[[9]])
+
+#10 Simuliidae
+#strong relationship
+print(range_20[[10]])
+
+#11 Tipulidae
+#no relationship
+print(range_20[[11]])
+
+
+
+#Lets look at a slightly larger range, maybe like 15
+
+pres_bugs2_15 <- pres_bugs2 |>
+  filter(sites_present >=15,
+         !is.na(family)) |>
+  pull(family)
+
+pres_bugs2_15
+
+
+
+
+
+
+
+
+#Reece If you use the correct function you get the correct output 
+
+#Looking at the lat rather than mat.c ####
+Bug_DATA
+
+#getting what I need 
+lat_dat <- Bug_DATA|>
+  select(siteID, family,Latitude,Longitude,dw_AVE)
+lat_dat
+
+
+chiron_lat <- lat_dat|>
+  filter(family == "Chironomidae")
+
+ggplot(chiron_lat,
+       aes(x = Latitude,
+           y = dw_AVE))+
+  geom_point()+
+  geom_smooth(method = "lm")
+
+
+
+
+
+
+
 
 
 
